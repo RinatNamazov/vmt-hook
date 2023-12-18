@@ -1,0 +1,12 @@
+[package]
+name = "vmt-hook"
+version = "0.1.0"
+authors = ["Rinat Namazov <rinat.namazov@rinwares.com>"]
+description = "Virtual method table hook library"
+keywords = ["vmt", "vtable", "hook", "detour"]
+homepage = "https://github.com/RinatNamazov/vmt-hook"
+repository = "https://github.com/RinatNamazov/vmt-hook"
+documentation = "https://docs.rs/vmt-hook"
+readme = "README.md"
+license = "MIT"
+edition = "2021"

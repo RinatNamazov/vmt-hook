@@ -47,7 +47,7 @@ use std::cell::RefCell;
 /// }
 ///
 /// unsafe fn instal_d3d9_hook() {
-///     let device: *mut IDirect3DDevice9 = /* Your ptr. */;
+///     let device: IDirect3DDevice9 = /* Your ptr. */;
 ///
 ///     // Creating a hook with automatic detection of the number of methods in its VMT.
 ///     // let hook = VTableHook::new(device);
@@ -60,14 +60,11 @@ use std::cell::RefCell;
 ///
 ///     // Replacing the method at index 17 in the VMT with our function.
 ///     hook.hook_method(17, hk_present as usize);
-///
-///     // Getting our hook function.
-///     let hook_method = hook.get_hook_method(17);
 /// }
 /// ````
 pub struct VTableHook<T> {
     /// Pointer to the object whose VTable is being hooked.
-    object: *mut T,
+    object: T,
     /// Pointer to the original VTable.
     original_vtbl: *const usize,
     /// Count of methods in the VTable.
@@ -80,34 +77,34 @@ impl<T> Drop for VTableHook<T> {
     /// Restoring the original VTable.
     fn drop(&mut self) {
         unsafe {
-            *(self.object as *mut *const usize) = self.original_vtbl;
+            *std::mem::transmute_copy::<_, *mut *const usize>(&self.object) = self.original_vtbl;
         }
     }
 }
 
 impl<T> VTableHook<T> {
     /// Creates a new VTableHook instance for the provided object and replaces its VTable with the hooked VTable.
-    pub unsafe fn new(object: *mut T) -> Self {
-        let original_vtbl = *(object as *mut *const usize);
-        let count = Self::detect_vtable_methods_count(original_vtbl);
-        let new_vtbl = Self::create_vmt_copy(original_vtbl, count);
-
-        *(object as *mut *const usize) = new_vtbl.borrow().as_ptr();
-
-        Self {
-            object,
-            original_vtbl,
-            count,
-            new_vtbl,
-        }
+    /// The count of methods is automatically determined.
+    pub unsafe fn new(object: T) -> Self {
+        Self::init(object, |vtable| Self::detect_vtable_methods_count(vtable))
     }
 
-    /// Creates a new VTableHook instance for the provided object with a specified method count and replaces its VTable with the hooked VTable.
-    pub unsafe fn with_count(object: *mut T, count: usize) -> Self {
-        let original_vtbl = *(object as *mut *const usize);
+    /// Creates a new VTableHook instance for the provided object with a specified method count
+    /// and replaces its VTable with the hooked VTable.
+    pub unsafe fn with_count(object: T, count: usize) -> Self {
+        Self::init(object, |_| count)
+    }
+
+    unsafe fn init<F>(object: T, count_fn: F) -> Self
+    where
+        F: FnOnce(*const usize) -> usize
+    {
+        let object_ptr = std::mem::transmute_copy::<T, *mut *const usize>(&object);
+        let original_vtbl = *object_ptr;
+        let count = count_fn(original_vtbl);
         let new_vtbl = Self::create_vmt_copy(original_vtbl, count);
 
-        *(object as *mut *const usize) = new_vtbl.borrow().as_ptr();
+        *object_ptr = new_vtbl.borrow().as_ptr();
 
         Self {
             object,
@@ -164,5 +161,10 @@ impl<T> VTableHook<T> {
     /// Restores all methods in the VTable to their original address.
     pub unsafe fn restore_all_methods(&self) {
         std::ptr::copy_nonoverlapping(self.original_vtbl, self.new_vtbl.borrow_mut().as_mut_ptr(), self.count);
+    }
+
+    /// Returns the original object.
+    pub fn object(&self) -> &T {
+        &self.object
     }
 }

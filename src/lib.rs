@@ -66,9 +66,7 @@ pub struct VTableHook<T> {
     /// Pointer to the object whose VTable is being hooked.
     object: T,
     /// Pointer to the original VTable.
-    original_vtbl: *const usize,
-    /// Count of methods in the VTable.
-    count: usize,
+    original_vtbl: &'static [usize],
     /// New VTable containing hooked function address.
     new_vtbl: RefCell<Vec<usize>>,
 }
@@ -77,7 +75,7 @@ impl<T> Drop for VTableHook<T> {
     /// Restoring the original VTable.
     fn drop(&mut self) {
         unsafe {
-            *std::mem::transmute_copy::<_, *mut *const usize>(&self.object) = self.original_vtbl;
+            *std::mem::transmute_copy::<_, *mut *const usize>(&self.object) = self.original_vtbl.as_ptr();
         }
     }
 }
@@ -102,26 +100,16 @@ impl<T> VTableHook<T> {
         let object_ptr = std::mem::transmute_copy::<T, *mut *const usize>(&object);
         let original_vtbl = *object_ptr;
         let count = count_fn(original_vtbl);
-        let new_vtbl = Self::create_vmt_copy(original_vtbl, count);
+        let original_vtbl = std::slice::from_raw_parts(original_vtbl, count);
+        let new_vtbl = original_vtbl.to_vec();
 
-        *object_ptr = new_vtbl.borrow().as_ptr();
+        *object_ptr = new_vtbl.as_ptr();
 
         Self {
             object,
             original_vtbl,
-            count,
-            new_vtbl,
+            new_vtbl: RefCell::new(new_vtbl),
         }
-    }
-
-    /// Creates a copy of the original VTable.
-    unsafe fn create_vmt_copy(original_vtbl: *const usize, count: usize) -> RefCell<Vec<usize>> {
-        let mut vtbl = Vec::with_capacity(count);
-
-        std::ptr::copy_nonoverlapping(original_vtbl, vtbl.as_mut_ptr(), count);
-        vtbl.set_len(count);
-
-        RefCell::new(vtbl)
     }
 
     /// Detects the number of methods in the provided VTable.
@@ -137,10 +125,7 @@ impl<T> VTableHook<T> {
 
     /// Retrieves the original method address at the specified index in the VTable.
     pub fn get_original_method(&self, id: usize) -> usize {
-        if id > self.count {
-            panic!("index out of bounds");
-        }
-        unsafe { std::ptr::read(self.original_vtbl.add(id)) }
+        self.original_vtbl[id]
     }
 
     /// Retrieves the hooked method address at the specified index in the VTable.
@@ -160,7 +145,7 @@ impl<T> VTableHook<T> {
 
     /// Restores all methods in the VTable to their original address.
     pub unsafe fn restore_all_methods(&self) {
-        std::ptr::copy_nonoverlapping(self.original_vtbl, self.new_vtbl.borrow_mut().as_mut_ptr(), self.count);
+        self.new_vtbl.borrow_mut().copy_from_slice(self.original_vtbl);
     }
 
     /// Returns the original object.

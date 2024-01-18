@@ -59,7 +59,7 @@ use std::cell::UnsafeCell;
 ///     ORIGINAL_PRESENT = Some(std::mem::transmute(hook.get_original_method(17)));
 ///
 ///     // Replacing the method at index 17 in the VMT with our function.
-///     hook.hook_method(17, hk_present as usize);
+///     hook.replace_method(17, hk_present as usize);
 /// }
 /// ````
 pub struct VTableHook<T> {
@@ -116,6 +116,7 @@ impl<T> VTableHook<T> {
     unsafe fn detect_vtable_methods_count(vtable: *const usize) -> usize {
         let mut vmt = vtable;
 
+        // Todo: Maybe add a memory region length check?
         while std::ptr::read(vmt) != 0 {
             vmt = vmt.add(1);
         }
@@ -128,18 +129,18 @@ impl<T> VTableHook<T> {
         unsafe { &mut *self.new_vtbl.get() }
     }
 
-    /// Retrieves the original method address at the specified index in the VTable.
+    /// Returns the original method address at the specified index in the VTable.
     pub fn get_original_method(&self, id: usize) -> usize {
         self.original_vtbl[id]
     }
 
-    /// Retrieves the hooked method address at the specified index in the VTable.
-    pub fn get_hook_method(&self, id: usize) -> usize {
+    /// Returns the replaced method address at the specified index in the VTable.
+    pub fn get_replaced_method(&self, id: usize) -> usize {
         self.vtbl()[id]
     }
 
     /// Hooks the method at the specified index in the VTable with a new function address.
-    pub unsafe fn hook_method(&self, id: usize, func: usize) {
+    pub unsafe fn replace_method(&self, id: usize, func: usize) {
         self.vtbl()[id] = func;
     }
 

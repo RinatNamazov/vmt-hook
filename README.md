@@ -65,7 +65,7 @@ extern "stdcall" fn hk_present(
 }
 
 unsafe fn instal_d3d9_hook() {
-    let device: *mut IDirect3DDevice9 = /* Your ptr. */;
+    let device: IDirect3DDevice9 = /* Your ptr. */;
 
     // Creating a hook with automatic detection of the number of methods in its VMT.
     // let hook = VTableHook::new(device);
@@ -77,10 +77,7 @@ unsafe fn instal_d3d9_hook() {
     ORIGINAL_PRESENT = Some(std::mem::transmute(hook.get_original_method(17)));
 
     // Replacing the method at index 17 in the VMT with our function.
-    hook.hook_method(17, hk_present as usize);
-
-    // Getting our hook function.
-    let hook_method = hook.get_hook_method(17);
+    hook.replace_method(17, hk_present as usize);
 }
 ```
 

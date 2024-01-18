@@ -1,7 +1,7 @@
 //! This library provides the ability to hook Virtual Method Tables (VMT).
 //! It works by copying the original VMT and then swapping it out with the modified version.
 
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 
 /// Represents a structure responsible for hooking and managing the virtual function table (VTable) of a given type.
 ///
@@ -68,7 +68,7 @@ pub struct VTableHook<T> {
     /// Pointer to the original VTable.
     original_vtbl: &'static [usize],
     /// New VTable containing hooked function address.
-    new_vtbl: RefCell<Vec<usize>>,
+    new_vtbl: UnsafeCell<Vec<usize>>,
 }
 
 impl<T> Drop for VTableHook<T> {
@@ -108,7 +108,7 @@ impl<T> VTableHook<T> {
         Self {
             object,
             original_vtbl,
-            new_vtbl: RefCell::new(new_vtbl),
+            new_vtbl: UnsafeCell::new(new_vtbl),
         }
     }
 
@@ -123,6 +123,11 @@ impl<T> VTableHook<T> {
         (vmt as usize - vtable as usize) / std::mem::size_of::<usize>()
     }
 
+    /// Returns our hooked vtable.
+    fn vtbl(&self) -> &mut Vec<usize> {
+        unsafe { &mut *self.new_vtbl.get() }
+    }
+
     /// Retrieves the original method address at the specified index in the VTable.
     pub fn get_original_method(&self, id: usize) -> usize {
         self.original_vtbl[id]
@@ -130,22 +135,22 @@ impl<T> VTableHook<T> {
 
     /// Retrieves the hooked method address at the specified index in the VTable.
     pub fn get_hook_method(&self, id: usize) -> usize {
-        self.new_vtbl.borrow()[id]
+        self.vtbl()[id]
     }
 
     /// Hooks the method at the specified index in the VTable with a new function address.
     pub unsafe fn hook_method(&self, id: usize, func: usize) {
-        self.new_vtbl.borrow_mut()[id] = func;
+        self.vtbl()[id] = func;
     }
 
     /// Restores the original method at the specified index in the VTable.
     pub unsafe fn restore_method(&self, id: usize) {
-        self.new_vtbl.borrow_mut()[id] = self.get_original_method(id);
+        self.vtbl()[id] = self.get_original_method(id);
     }
 
     /// Restores all methods in the VTable to their original address.
     pub unsafe fn restore_all_methods(&self) {
-        self.new_vtbl.borrow_mut().copy_from_slice(self.original_vtbl);
+        self.vtbl().copy_from_slice(self.original_vtbl);
     }
 
     /// Returns the original object.

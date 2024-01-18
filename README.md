@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vmt-hook = { version = "0.1.0" }
+vmt-hook = { version = "0.2.0" }
 ```
 
 ## Example
